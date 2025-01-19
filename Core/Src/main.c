@@ -29,8 +29,9 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-#define SAMPLING_ARRAY_LENGTH 10
+#define SAMPLING_ARRAY_LENGTH 2
 #define MEAN_ARRAY_LENGTH 4
+#define NO_SIGNAL_WATCH_TIME 10000 // 50 us sampling timer * SAMPLING_ARRAY_LENGTH = 10 sample per each ms, 1 s wait time = 10000
 
 /* USER CODE END PTD */
 
@@ -40,8 +41,13 @@
 bool timer_1_flag = false;
 bool timer_3_flag = false;
 
+bool auto_flag = false;
 bool down_preiod_posetive_flag = false;
 bool up_preiod_posetive_flag = false;
+
+bool down_lenght_posetive_flag = false;
+bool up_lenght_posetive_flag = false;
+bool general_state_posetive_flag = false;
 
 bool down_diff_posetive_flag = false;
 bool up_diff_posetive_flag = false;
@@ -51,24 +57,25 @@ uint8_t down_sensor_samples[SAMPLING_ARRAY_LENGTH];
 uint8_t up_sensor_samples[SAMPLING_ARRAY_LENGTH];
 uint8_t sampleIndex = 0;
 
-uint16_t down_up_diff_values[MEAN_ARRAY_LENGTH];
-uint16_t up_down_diff_values[MEAN_ARRAY_LENGTH];
-uint16_t down_period_values[MEAN_ARRAY_LENGTH];
-uint16_t up_period_values[MEAN_ARRAY_LENGTH];
+uint32_t down_sensor_lenght_values[MEAN_ARRAY_LENGTH];
+uint32_t up_sensor_lenght_values[MEAN_ARRAY_LENGTH];
+
+uint32_t down_up_diff_values[MEAN_ARRAY_LENGTH];
+uint32_t up_down_diff_values[MEAN_ARRAY_LENGTH];
+uint32_t down_period_values[MEAN_ARRAY_LENGTH];
+uint32_t up_period_values[MEAN_ARRAY_LENGTH];
 uint8_t valueIndex = 0;
 
-uint16_t down_sensor_lenght = 0;
-uint16_t up_sensor_lenght = 0;
-uint16_t general_state_length = 0;
+uint32_t down_sensor_lenght = 0;
+uint32_t up_sensor_lenght = 0;
 
-uint16_t down_sensor_lenght_last_value = 0;
-uint16_t up_sensor_lenght_last_value = 0;
-uint16_t general_state_length_last_value = 0;
+uint32_t down_sensor_period = 0;
+uint32_t up_sensor_period = 0;
+uint32_t down_up_diff = 0;
+uint32_t up_down_diff = 0;
 
-uint16_t down_sensor_period = 0;
-uint16_t up_sensor_period = 0;
-uint16_t down_up_diff = 0;
-uint16_t up_down_diff = 0;
+uint32_t up_length_watch_time = 0;
+uint32_t down_length_watch_time = 0;
 
 /* USER CODE END PD */
 
@@ -119,10 +126,10 @@ void transfer_data(void)
 	HAL_GPIO_TogglePin(ON_BOARD_LED_GPIO_Port, ON_BOARD_LED_Pin);
 	char message[100];
 	snprintf(message, sizeof(message),
-			 "sL: %d, uL: %d, dL: %d \r\nuP: %d, dP: %d \r\nudD: %d, duD: %d \r\n",
-			  general_state_length_last_value,
-			  up_sensor_lenght_last_value,
-			  down_sensor_lenght_last_value,
+			 "sF: %d, uL: %lu, dL: %lu \r\nuP: %lu, dP: %lu \r\nudD: %lu, duD: %lu \r\n",
+			  auto_flag,
+			  up_sensor_lenght_values[MEAN_ARRAY_LENGTH -1],
+			  down_sensor_lenght_values[MEAN_ARRAY_LENGTH -1],
 			  up_period_values[MEAN_ARRAY_LENGTH -1],
 			  down_period_values[MEAN_ARRAY_LENGTH -1],
 			  up_down_diff_values[MEAN_ARRAY_LENGTH -1],
@@ -145,9 +152,9 @@ void sampling_data(void)
 			uint8_t down_sensor_one_counts = check_value_counts(down_sensor_samples, 1);
 			uint8_t up_sensor_one_counts = check_value_counts(up_sensor_samples, 1);
 
-			check_signal_length(general_state_one_counts, &general_state_length, &general_state_length_last_value);
-			check_signal_length(down_sensor_one_counts, &down_sensor_lenght, &down_sensor_lenght_last_value);
-			check_signal_length(up_sensor_one_counts, &up_sensor_lenght, &up_sensor_lenght_last_value);
+			check_general_state(general_state_one_counts);
+			check_signal_length_down(down_sensor_one_counts, &down_sensor_lenght);
+			check_signal_length_up(up_sensor_one_counts, &up_sensor_lenght);
 
 			check_down_periods(down_sensor_one_counts, &down_sensor_period);
 			check_up_periods(up_sensor_one_counts, &up_sensor_period);
@@ -161,7 +168,7 @@ void sampling_data(void)
 
 }
 
-void check_down_up_diff(uint8_t down_counts, uint8_t up_counts, uint16_t *diff)
+void check_down_up_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff)
 {
 	if (down_counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
@@ -187,7 +194,7 @@ void check_down_up_diff(uint8_t down_counts, uint8_t up_counts, uint16_t *diff)
 
 }
 
-void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint16_t *diff)
+void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff)
 {
 	if (up_counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
@@ -213,7 +220,7 @@ void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint16_t *diff)
 
 }
 
-void check_down_periods(uint8_t counts, uint16_t *period)
+void check_down_periods(uint8_t counts, uint32_t *period)
 {
 	if (counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
@@ -239,7 +246,7 @@ void check_down_periods(uint8_t counts, uint16_t *period)
 
 }
 
-void check_up_periods(uint8_t counts, uint16_t *period)
+void check_up_periods(uint8_t counts, uint32_t *period)
 {
 	if (counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
@@ -265,7 +272,7 @@ void check_up_periods(uint8_t counts, uint16_t *period)
 
 }
 
-void shift_and_insert_values(uint16_t *values, uint16_t new_value) {
+void shift_and_insert_values(uint32_t *values, uint32_t new_value) {
 
     for (int i = 0; i < MEAN_ARRAY_LENGTH - 1; i++) {
     	values[i] = values[i + 1];
@@ -274,20 +281,80 @@ void shift_and_insert_values(uint16_t *values, uint16_t new_value) {
     values[MEAN_ARRAY_LENGTH - 1] = new_value;
 }
 
-void check_signal_length(uint8_t counts, uint16_t *length, uint16_t *last_value)
+void check_signal_length_up(uint8_t counts, uint32_t *length)
 {
 	if (counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
 		*length = *length + 1;
-		//*last_value = *length;
+		if (up_lenght_posetive_flag == false)
+		{
+			up_lenght_posetive_flag = true;
+			up_length_watch_time = 0;
+		}
 	}
 	else
 	{
-		if (*length != 0)
+		if (up_lenght_posetive_flag)
 		{
-			*last_value = *length;
+			shift_and_insert_values(up_sensor_lenght_values ,*length);
 			*length = 0;
+			up_lenght_posetive_flag = false;
 		}
+		else
+		{
+			up_length_watch_time++;
+			if (up_length_watch_time >= NO_SIGNAL_WATCH_TIME)
+			{
+				shift_and_insert_values(up_sensor_lenght_values ,0);
+				up_length_watch_time = 0;
+			}
+
+		}
+	}
+
+}
+
+void check_signal_length_down(uint8_t counts, uint32_t *length)
+{
+	if (counts > (SAMPLING_ARRAY_LENGTH / 2))
+	{
+		*length = *length + 1;
+		if (down_lenght_posetive_flag == false)
+		{
+			down_lenght_posetive_flag = true;
+			down_length_watch_time = 0;
+		}
+	}
+	else
+	{
+		if (down_lenght_posetive_flag)
+		{
+			shift_and_insert_values(down_sensor_lenght_values ,*length);
+			*length = 0;
+			down_lenght_posetive_flag = false;
+		}
+		else
+		{
+			down_length_watch_time++;
+			if (down_length_watch_time >= NO_SIGNAL_WATCH_TIME)
+			{
+				shift_and_insert_values(down_sensor_lenght_values ,0);
+				down_length_watch_time = 0;
+			}
+		}
+	}
+
+}
+
+void check_general_state(uint8_t counts)
+{
+	if (counts > (SAMPLING_ARRAY_LENGTH / 2))
+	{
+		auto_flag = true;
+	}
+	else
+	{
+		auto_flag = false;
 	}
 
 }
@@ -360,9 +427,9 @@ int main(void)
 	if (timer_3_flag)
 	{
         sampling_data();
+    }
   }
   /* USER CODE END 3 */
-}
 }
 
 /**
@@ -381,7 +448,10 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL12;
+  RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -391,11 +461,11 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -428,9 +498,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 1000;
+  htim1.Init.Prescaler = 48000-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 4000;
+  htim1.Init.Period = 500;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -502,9 +572,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 8-1;
+  htim3.Init.Prescaler = 48-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 100;
+  htim3.Init.Period = 49;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -527,7 +597,7 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
-  sConfigOC.Pulse = 100;
+  sConfigOC.Pulse = 49;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)

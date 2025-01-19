@@ -56,14 +56,18 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 uint8_t check_value_counts(uint8_t *samples, uint8_t value);
-void check_signal_length(uint8_t counts, uint16_t *length, uint16_t *last_value);
+
+void check_signal_length_up(uint8_t counts, uint32_t *length);
+void check_signal_length_down(uint8_t counts, uint32_t *length);
+void check_general_state(uint8_t counts);
+
 void transfer_data(void);
 void sampling_data(void);
-void shift_and_insert_values(uint16_t *values, uint16_t new_value);
-void check_up_periods(uint8_t counts, uint16_t *period);
-void check_down_periods(uint8_t counts, uint16_t *period);
-void check_down_up_diff(uint8_t down_counts, uint8_t up_counts, uint16_t *diff);
-void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint16_t *diff);
+void shift_and_insert_values(uint32_t *values, uint32_t new_value);
+void check_up_periods(uint8_t counts, uint32_t *period);
+void check_down_periods(uint8_t counts, uint32_t *period);
+void check_down_up_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff);
+void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

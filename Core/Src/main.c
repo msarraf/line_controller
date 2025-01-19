@@ -42,12 +42,15 @@ bool timer_1_flag = false;
 bool timer_3_flag = false;
 
 bool auto_flag = false;
+
 bool down_preiod_posetive_flag = false;
 bool up_preiod_posetive_flag = false;
 
+bool left_key_length_posetive_flag = false;
+bool right_key_length_posetive_flag = false;
+
 bool down_lenght_posetive_flag = false;
 bool up_lenght_posetive_flag = false;
-bool general_state_posetive_flag = false;
 
 bool down_diff_posetive_flag = false;
 bool up_diff_posetive_flag = false;
@@ -55,11 +58,15 @@ bool up_diff_posetive_flag = false;
 uint8_t general_state_samples[SAMPLING_ARRAY_LENGTH];
 uint8_t down_sensor_samples[SAMPLING_ARRAY_LENGTH];
 uint8_t up_sensor_samples[SAMPLING_ARRAY_LENGTH];
+uint8_t left_move_key_samples[SAMPLING_ARRAY_LENGTH];
+uint8_t right_move_key_samples[SAMPLING_ARRAY_LENGTH];
+
 uint8_t sampleIndex = 0;
 
 uint32_t down_sensor_lenght_values[MEAN_ARRAY_LENGTH];
 uint32_t up_sensor_lenght_values[MEAN_ARRAY_LENGTH];
-
+uint32_t left_move_key_length_values[MEAN_ARRAY_LENGTH];
+uint32_t right_move_key_length_values[MEAN_ARRAY_LENGTH];
 uint32_t down_up_diff_values[MEAN_ARRAY_LENGTH];
 uint32_t up_down_diff_values[MEAN_ARRAY_LENGTH];
 uint32_t down_period_values[MEAN_ARRAY_LENGTH];
@@ -69,8 +76,12 @@ uint8_t valueIndex = 0;
 uint32_t down_sensor_lenght = 0;
 uint32_t up_sensor_lenght = 0;
 
+uint32_t left_key_lenght = 0;
+uint32_t right_key_lenght = 0;
+
 uint32_t down_sensor_period = 0;
 uint32_t up_sensor_period = 0;
+
 uint32_t down_up_diff = 0;
 uint32_t up_down_diff = 0;
 
@@ -126,10 +137,12 @@ void transfer_data(void)
 	HAL_GPIO_TogglePin(ON_BOARD_LED_GPIO_Port, ON_BOARD_LED_Pin);
 	char message[100];
 	snprintf(message, sizeof(message),
-			 "sF: %d, uL: %lu, dL: %lu \r\nuP: %lu, dP: %lu \r\nudD: %lu, duD: %lu \r\n",
+			 "\r\nsF: %d, uL: %lu, dL: %lu, lkL: %lu, rkL: %lu  \r\nuP: %lu, dP: %lu \r\nudD: %lu, duD: %lu \r\n",
 			  auto_flag,
 			  up_sensor_lenght_values[MEAN_ARRAY_LENGTH -1],
 			  down_sensor_lenght_values[MEAN_ARRAY_LENGTH -1],
+			  left_move_key_length_values[MEAN_ARRAY_LENGTH -1],
+			  right_move_key_length_values[MEAN_ARRAY_LENGTH -1],
 			  up_period_values[MEAN_ARRAY_LENGTH -1],
 			  down_period_values[MEAN_ARRAY_LENGTH -1],
 			  up_down_diff_values[MEAN_ARRAY_LENGTH -1],
@@ -144,6 +157,8 @@ void sampling_data(void)
 	general_state_samples[sampleIndex] = HAL_GPIO_ReadPin(GENERAL_STATE_GPIO_Port, GENERAL_STATE_Pin);
 	down_sensor_samples[sampleIndex] = HAL_GPIO_ReadPin(DOWN_SENSOR_GPIO_Port, DOWN_SENSOR_Pin);
 	up_sensor_samples[sampleIndex] = HAL_GPIO_ReadPin(UP_SENSOR_GPIO_Port, UP_SENSOR_Pin);
+	left_move_key_samples[sampleIndex]= HAL_GPIO_ReadPin(LEFT_MOVE_KEY_GPIO_Port, LEFT_MOVE_KEY_Pin);
+	right_move_key_samples[sampleIndex]= HAL_GPIO_ReadPin(RIGHT_MOVE_KEY_GPIO_Port, RIGHT_MOVE_KEY_Pin);
 	sampleIndex++;
 
 	if (sampleIndex >= SAMPLING_ARRAY_LENGTH)
@@ -151,10 +166,14 @@ void sampling_data(void)
 			uint8_t general_state_one_counts = check_value_counts(general_state_samples, 1);
 			uint8_t down_sensor_one_counts = check_value_counts(down_sensor_samples, 1);
 			uint8_t up_sensor_one_counts = check_value_counts(up_sensor_samples, 1);
+			uint8_t left_key_one_counts = check_value_counts(left_move_key_samples, 1);
+			uint8_t right_key_one_counts = check_value_counts(right_move_key_samples, 1);
 
 			check_general_state(general_state_one_counts);
 			check_signal_length_down(down_sensor_one_counts, &down_sensor_lenght);
 			check_signal_length_up(up_sensor_one_counts, &up_sensor_lenght);
+			check_signal_length_left_key(left_key_one_counts, &left_key_lenght);
+			check_signal_length_right_key(right_key_one_counts, &right_key_lenght);
 
 			check_down_periods(down_sensor_one_counts, &down_sensor_period);
 			check_up_periods(up_sensor_one_counts, &up_sensor_period);
@@ -355,6 +374,50 @@ void check_general_state(uint8_t counts)
 	else
 	{
 		auto_flag = false;
+	}
+
+}
+
+void check_signal_length_left_key(uint8_t counts, uint32_t *length)
+{
+	if (counts > (SAMPLING_ARRAY_LENGTH / 2))
+	{
+		*length = *length + 1;
+		if (left_key_length_posetive_flag == false)
+		{
+			left_key_length_posetive_flag = true;
+		}
+	}
+	else
+	{
+		if (left_key_length_posetive_flag)
+		{
+			shift_and_insert_values(left_move_key_length_values ,*length);
+			*length = 0;
+			left_key_length_posetive_flag = false;
+		}
+	}
+
+}
+
+void check_signal_length_right_key(uint8_t counts, uint32_t *length)
+{
+	if (counts > (SAMPLING_ARRAY_LENGTH / 2))
+	{
+		*length = *length + 1;
+		if (right_key_length_posetive_flag == false)
+		{
+			right_key_length_posetive_flag = true;
+		}
+	}
+	else
+	{
+		if (right_key_length_posetive_flag)
+		{
+			shift_and_insert_values(right_move_key_length_values ,*length);
+			*length = 0;
+			right_key_length_posetive_flag = false;
+		}
 	}
 
 }
@@ -658,10 +721,18 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, MOTOR_RIGHT_Pin|ON_BOARD_LED_Pin|MOTOR_LEFT_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : LEFT_MOVE_KEY_Pin */
+  GPIO_InitStruct.Pin = LEFT_MOVE_KEY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(LEFT_MOVE_KEY_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : GENERAL_STATE_Pin DOWN_SENSOR_Pin UP_SENSOR_Pin */
   GPIO_InitStruct.Pin = GENERAL_STATE_Pin|DOWN_SENSOR_Pin|UP_SENSOR_Pin;
@@ -675,6 +746,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : RIGHT_MOVE_KEY_Pin */
+  GPIO_InitStruct.Pin = RIGHT_MOVE_KEY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(RIGHT_MOVE_KEY_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */

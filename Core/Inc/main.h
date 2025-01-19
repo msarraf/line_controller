@@ -59,6 +59,10 @@ uint8_t check_value_counts(uint8_t *samples, uint8_t value);
 
 void check_signal_length_up(uint8_t counts, uint32_t *length);
 void check_signal_length_down(uint8_t counts, uint32_t *length);
+
+void check_signal_length_left_key(uint8_t counts, uint32_t *length);
+void check_signal_length_right_key(uint8_t counts, uint32_t *length);
+
 void check_general_state(uint8_t counts);
 
 void transfer_data(void);
@@ -71,6 +75,8 @@ void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LEFT_MOVE_KEY_Pin GPIO_PIN_1
+#define LEFT_MOVE_KEY_GPIO_Port GPIOF
 #define GENERAL_STATE_Pin GPIO_PIN_0
 #define GENERAL_STATE_GPIO_Port GPIOA
 #define MOTOR_RIGHT_Pin GPIO_PIN_1
@@ -83,6 +89,8 @@ void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff);
 #define MOTOR_LEFT_GPIO_Port GPIOA
 #define SAMPLING_FREQ_Pin GPIO_PIN_7
 #define SAMPLING_FREQ_GPIO_Port GPIOA
+#define RIGHT_MOVE_KEY_Pin GPIO_PIN_1
+#define RIGHT_MOVE_KEY_GPIO_Port GPIOB
 #define BASE_TIMER_Pin GPIO_PIN_9
 #define BASE_TIMER_GPIO_Port GPIOA
 #define UP_SENSOR_Pin GPIO_PIN_10

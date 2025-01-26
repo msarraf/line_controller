@@ -31,8 +31,21 @@
 
 #define SAMPLING_ARRAY_LENGTH 2
 #define MEAN_ARRAY_LENGTH 4
-#define NO_SIGNAL_WATCH_TIME 10000 // 50 us sampling timer * SAMPLING_ARRAY_LENGTH = 10 sample per each ms, 1 s wait time = 10000
+#define NO_SIGNAL_WATCH_TIME 40000 // 50 us sampling timer * SAMPLING_ARRAY_LENGTH = 10 sample per each ms, 4 s wait time = 40000
+#define DEBOUNCE 500
 
+typedef enum {
+    ERROR_NONE = 0,
+    ERROR_UP_SENSOR,
+    ERROR_DOWN_SENSOR,
+} ErrorCode_t;
+
+//typedef struct {
+//    uint32 error;
+//    b sign;
+//} Error;
+
+void ErrorHandler(ErrorCode_t error);
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -43,6 +56,8 @@ bool timer_3_flag = false;
 
 bool auto_flag = false;
 
+ErrorCode_t error = ERROR_NONE;
+
 bool down_preiod_posetive_flag = false;
 bool up_preiod_posetive_flag = false;
 
@@ -52,8 +67,14 @@ bool right_key_length_posetive_flag = false;
 bool down_lenght_posetive_flag = false;
 bool up_lenght_posetive_flag = false;
 
-bool down_diff_posetive_flag = false;
-bool up_diff_posetive_flag = false;
+
+bool ud_down_posetive_flag = false;
+bool ud_up_posetive_flag = false;
+bool du_down_posetive_flag = false;
+bool du_up_posetive_flag = false;
+
+bool left_move_key_effect_a_flag = false;
+bool right_move_key_effect_a_flag = false;
 
 uint8_t general_state_samples[SAMPLING_ARRAY_LENGTH];
 uint8_t down_sensor_samples[SAMPLING_ARRAY_LENGTH];
@@ -62,6 +83,8 @@ uint8_t left_move_key_samples[SAMPLING_ARRAY_LENGTH];
 uint8_t right_move_key_samples[SAMPLING_ARRAY_LENGTH];
 
 uint8_t sampleIndex = 0;
+uint8_t left_move_key_effect_a_counter = 0;
+uint8_t right_move_key_effect_a_counter = 0;
 
 uint32_t down_sensor_lenght_values[MEAN_ARRAY_LENGTH];
 uint32_t up_sensor_lenght_values[MEAN_ARRAY_LENGTH];
@@ -71,6 +94,13 @@ uint32_t down_up_diff_values[MEAN_ARRAY_LENGTH];
 uint32_t up_down_diff_values[MEAN_ARRAY_LENGTH];
 uint32_t down_period_values[MEAN_ARRAY_LENGTH];
 uint32_t up_period_values[MEAN_ARRAY_LENGTH];
+
+uint32_t left_move_key_effect_error_a_values[MEAN_ARRAY_LENGTH];
+uint32_t left_move_key_effect_error_b_values[MEAN_ARRAY_LENGTH];
+
+uint32_t right_move_key_effect_error_a_values[MEAN_ARRAY_LENGTH];
+uint32_t right_move_key_effect_error_b_values[MEAN_ARRAY_LENGTH];
+
 uint8_t valueIndex = 0;
 
 uint32_t down_sensor_lenght = 0;
@@ -87,6 +117,8 @@ uint32_t up_down_diff = 0;
 
 uint32_t up_length_watch_time = 0;
 uint32_t down_length_watch_time = 0;
+
+uint32_t down_period = 0;
 
 /* USER CODE END PD */
 
@@ -135,18 +167,23 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void transfer_data(void)
 {
 	HAL_GPIO_TogglePin(ON_BOARD_LED_GPIO_Port, ON_BOARD_LED_Pin);
-	char message[100];
+	char message[150];
 	snprintf(message, sizeof(message),
-			 "\r\nsF: %d, uL: %lu, dL: %lu, lkL: %lu, rkL: %lu  \r\nuP: %lu, dP: %lu \r\nudD: %lu, duD: %lu \r\n",
+			 "\r\nsF: %d, uL: %lu, dL: %lu\r\nlkL: %lu, lkbD: %lu, lkaD: %lu\r\nrkL: %lu, rkbD: %lu, rkaD: %lu\r\nuP: %lu, dP: %lu \r\nudD: %lu, duD: %lu \r\nerror: %d\r\n",
 			  auto_flag,
 			  up_sensor_lenght_values[MEAN_ARRAY_LENGTH -1],
 			  down_sensor_lenght_values[MEAN_ARRAY_LENGTH -1],
 			  left_move_key_length_values[MEAN_ARRAY_LENGTH -1],
+			  left_move_key_effect_error_b_values[MEAN_ARRAY_LENGTH -1],
+			  left_move_key_effect_error_a_values[MEAN_ARRAY_LENGTH -1],
 			  right_move_key_length_values[MEAN_ARRAY_LENGTH -1],
+			  right_move_key_effect_error_b_values[MEAN_ARRAY_LENGTH -1],
+			  right_move_key_effect_error_a_values[MEAN_ARRAY_LENGTH -1],
 			  up_period_values[MEAN_ARRAY_LENGTH -1],
 			  down_period_values[MEAN_ARRAY_LENGTH -1],
 			  up_down_diff_values[MEAN_ARRAY_LENGTH -1],
-			  down_up_diff_values[MEAN_ARRAY_LENGTH -1]);
+			  down_up_diff_values[MEAN_ARRAY_LENGTH -1],
+			  error);
 	HAL_UART_Transmit(&huart1, (uint8_t *)message, strlen(message), HAL_MAX_DELAY);
 	timer_1_flag = false;
 
@@ -172,14 +209,43 @@ void sampling_data(void)
 			check_general_state(general_state_one_counts);
 			check_signal_length_down(down_sensor_one_counts, &down_sensor_lenght);
 			check_signal_length_up(up_sensor_one_counts, &up_sensor_lenght);
-			check_signal_length_left_key(left_key_one_counts, &left_key_lenght);
-			check_signal_length_right_key(right_key_one_counts, &right_key_lenght);
+
+			if (auto_flag == false)
+			{
+				check_signal_length_left_key(left_key_one_counts, &left_key_lenght);
+				check_signal_length_right_key(right_key_one_counts, &right_key_lenght);
+			}
 
 			check_down_periods(down_sensor_one_counts, &down_sensor_period);
 			check_up_periods(up_sensor_one_counts, &up_sensor_period);
 
 			check_down_up_diff(down_sensor_one_counts, up_sensor_one_counts, &down_up_diff);
 			check_up_down_diff(down_sensor_one_counts, up_sensor_one_counts, &up_down_diff);
+
+			if (left_move_key_effect_a_flag)
+			{
+				left_move_key_effect_a_counter++;
+				if (left_move_key_effect_a_counter >= MEAN_ARRAY_LENGTH)
+				{
+					left_move_key_effect_a_flag = false;
+					uint32_t error = calculate_error(down_up_diff_values, up_down_diff_values);
+					shift_and_insert_values(left_move_key_effect_error_a_values ,error);
+					left_move_key_effect_a_counter = 0;
+				}
+			}
+
+			if (right_move_key_effect_a_flag)
+			{
+				right_move_key_effect_a_counter++;
+				if (right_move_key_effect_a_counter >= MEAN_ARRAY_LENGTH)
+				{
+					right_move_key_effect_a_flag = false;
+					uint32_t error = calculate_error(down_up_diff_values, up_down_diff_values);
+					shift_and_insert_values(right_move_key_effect_error_a_values ,error);
+					right_move_key_effect_a_counter = 0;
+				}
+			}
+
 			sampleIndex = 0;
 
 	}
@@ -191,25 +257,32 @@ void check_down_up_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff)
 {
 	if (down_counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
-		if(down_diff_posetive_flag == false)
+		if(du_down_posetive_flag == false)
 		{
 			*diff = 0;
-			down_diff_posetive_flag = true;
+			du_down_posetive_flag = true;
 		}
 
+	}
+	else
+	{
+		du_down_posetive_flag = false;
 	}
 	if (up_counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
-		if (down_diff_posetive_flag == true)
+		if (du_up_posetive_flag == false)
 		{
 			shift_and_insert_values(down_up_diff_values ,*diff);
-			down_diff_posetive_flag = false;
+			du_up_posetive_flag = true;
 		}
 
 	}
+	else
+	{
+		du_up_posetive_flag = false;
+	}
 
 	*diff = *diff + 1;
-
 
 }
 
@@ -217,25 +290,32 @@ void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff)
 {
 	if (up_counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
-		if(up_diff_posetive_flag == false)
+		if(ud_up_posetive_flag == false)
 		{
 			*diff = 0;
-			up_diff_posetive_flag = true;
+			ud_up_posetive_flag = true;
 		}
 
+	}
+	else
+	{
+		ud_up_posetive_flag = false;
 	}
 	if (down_counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
-		if (up_diff_posetive_flag == true)
+		if (ud_down_posetive_flag == false)
 		{
 			shift_and_insert_values(up_down_diff_values ,*diff);
-			up_diff_posetive_flag = false;
+			ud_down_posetive_flag = true;
 		}
 
 	}
+	else
+	{
+		ud_down_posetive_flag = false;
+	}
 
 	*diff = *diff + 1;
-
 
 }
 
@@ -307,6 +387,7 @@ void check_signal_length_up(uint8_t counts, uint32_t *length)
 		*length = *length + 1;
 		if (up_lenght_posetive_flag == false)
 		{
+			if (error == ERROR_UP_SENSOR) error = ERROR_NONE;
 			up_lenght_posetive_flag = true;
 			up_length_watch_time = 0;
 		}
@@ -326,6 +407,7 @@ void check_signal_length_up(uint8_t counts, uint32_t *length)
 			{
 				shift_and_insert_values(up_sensor_lenght_values ,0);
 				up_length_watch_time = 0;
+				error = ERROR_UP_SENSOR;
 			}
 
 		}
@@ -340,6 +422,7 @@ void check_signal_length_down(uint8_t counts, uint32_t *length)
 		*length = *length + 1;
 		if (down_lenght_posetive_flag == false)
 		{
+			if (error == ERROR_DOWN_SENSOR) error = ERROR_NONE;
 			down_lenght_posetive_flag = true;
 			down_length_watch_time = 0;
 		}
@@ -358,6 +441,7 @@ void check_signal_length_down(uint8_t counts, uint32_t *length)
 			if (down_length_watch_time >= NO_SIGNAL_WATCH_TIME)
 			{
 				shift_and_insert_values(down_sensor_lenght_values ,0);
+				error = ERROR_DOWN_SENSOR;
 				down_length_watch_time = 0;
 			}
 		}
@@ -369,7 +453,19 @@ void check_general_state(uint8_t counts)
 {
 	if (counts > (SAMPLING_ARRAY_LENGTH / 2))
 	{
-		auto_flag = true;
+		if (auto_flag == false)
+		{
+			auto_flag = true;
+//			manual_max_error = calculate_error(down_up_diff_values, up_down_diff_values);
+//			manual_priod = calculate_mean(down_period_values);
+//			manual_right_key_lenght = calculate_mean(right_move_key_length_values);
+//			manual_left_key_lenght = calculate_mean(left_move_key_length_values);
+//			manual_right_key_b = calculate_mean(right_move_key_effect_error_b_values);
+//			manual_right_key_a = calculate_mean(right_move_key_effect_error_a_values);
+//			manual_left_key_b = calculate_mean(left_move_key_effect_error_b_values);
+//			manual_left_key_a = calculate_mean(left_move_key_effect_error_a_values);
+
+		}
 	}
 	else
 	{
@@ -385,16 +481,26 @@ void check_signal_length_left_key(uint8_t counts, uint32_t *length)
 		*length = *length + 1;
 		if (left_key_length_posetive_flag == false)
 		{
+			uint32_t error = calculate_error(down_up_diff_values, up_down_diff_values);
+			shift_and_insert_values(left_move_key_effect_error_b_values ,error);
 			left_key_length_posetive_flag = true;
+			if ((left_move_key_effect_a_flag) && (left_move_key_effect_a_counter < MEAN_ARRAY_LENGTH))
+			{
+				uint32_t error = calculate_error_partialy(down_up_diff_values, up_down_diff_values, left_move_key_effect_a_counter);
+				shift_and_insert_values(left_move_key_effect_error_a_values ,error);
+			}
+			left_move_key_effect_a_flag = false;
+			left_move_key_effect_a_counter = 0;
 		}
 	}
 	else
 	{
-		if (left_key_length_posetive_flag)
+		if ((left_key_length_posetive_flag) && (*length > DEBOUNCE))
 		{
 			shift_and_insert_values(left_move_key_length_values ,*length);
 			*length = 0;
 			left_key_length_posetive_flag = false;
+			left_move_key_effect_a_flag = true;
 		}
 	}
 
@@ -407,16 +513,26 @@ void check_signal_length_right_key(uint8_t counts, uint32_t *length)
 		*length = *length + 1;
 		if (right_key_length_posetive_flag == false)
 		{
+			uint32_t error = calculate_error(down_up_diff_values, up_down_diff_values);
+			shift_and_insert_values(right_move_key_effect_error_b_values ,error);
 			right_key_length_posetive_flag = true;
+			if ((right_move_key_effect_a_flag) && (right_move_key_effect_a_counter < MEAN_ARRAY_LENGTH))
+			{
+				uint32_t error = calculate_error_partialy(down_up_diff_values, up_down_diff_values, right_move_key_effect_a_counter);
+				shift_and_insert_values(right_move_key_effect_error_a_values ,error);
+			}
+			right_move_key_effect_a_flag = false;
+			right_move_key_effect_a_counter = 0;
 		}
 	}
 	else
 	{
-		if (right_key_length_posetive_flag)
+		if ((right_key_length_posetive_flag) && (*length > DEBOUNCE))
 		{
 			shift_and_insert_values(right_move_key_length_values ,*length);
 			*length = 0;
 			right_key_length_posetive_flag = false;
+			right_move_key_effect_a_flag = true;
 		}
 	}
 
@@ -434,6 +550,83 @@ uint8_t check_value_counts(uint8_t *samples, uint8_t value)
 	}
 	return counts;
 }
+
+uint32_t calculate_error(uint32_t *values_1, uint32_t *values_2)
+{
+	uint32_t value_1_mean = calculate_mean(values_1);
+	uint32_t value_2_mean = calculate_mean(values_2);
+
+	if (value_1_mean < value_2_mean)
+		{
+			return value_1_mean;
+
+		}
+	else
+		{
+			return value_2_mean;
+		}
+}
+
+uint32_t calculate_mean(uint32_t *values)
+{
+    uint32_t sum = 0;
+    uint8_t num = 0;
+    for (uint8_t i = 0; i < MEAN_ARRAY_LENGTH; i++) {
+        if (values[i] > 0)
+        {
+        	sum += values[i];
+        	num +=1;
+        }
+    }
+    if (num > 0)
+    {
+    	return sum / num;
+    }
+    else
+    {
+    	return 0;
+    }
+
+}
+
+uint32_t calculate_error_partialy(uint32_t *values_1, uint32_t *values_2, uint8_t counter)
+{
+	uint32_t value_1_mean = calculate_mean_partialy(values_1, counter);
+	uint32_t value_2_mean = calculate_mean_partialy(values_2, counter);
+
+	if (value_1_mean < value_2_mean)
+		{
+			return value_1_mean;
+		}
+	else
+		{
+			return value_2_mean;
+		}
+}
+
+uint32_t calculate_mean_partialy(uint32_t *values, uint8_t counter)
+{
+    uint32_t sum = 0;
+    uint8_t num = 0;
+    for (uint8_t i = MEAN_ARRAY_LENGTH -1; i >= (MEAN_ARRAY_LENGTH - counter); i--) {
+        if (values[i] > 0)
+        {
+        	sum += values[i];
+        	num +=1;
+        }
+    }
+
+    if (num > 0)
+    {
+    	return sum / num;
+    }
+    else
+    {
+    	return 0;
+    }
+
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -563,7 +756,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 48000-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 500;
+  htim1.Init.Period = 1000-1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -587,7 +780,7 @@ static void MX_TIM1_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
-  sConfigOC.Pulse = 4000;
+  sConfigOC.Pulse = 1000-1;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;

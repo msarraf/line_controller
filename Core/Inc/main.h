@@ -72,6 +72,12 @@ void check_up_periods(uint8_t counts, uint32_t *period);
 void check_down_periods(uint8_t counts, uint32_t *period);
 void check_down_up_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff);
 void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff);
+
+uint32_t calculate_error(uint32_t *values_1, uint32_t *values_2);
+uint32_t calculate_mean(uint32_t *values);
+uint32_t calculate_error_partialy(uint32_t *values_1, uint32_t *values_2, uint8_t counter);
+uint32_t calculate_mean_partialy(uint32_t *values, uint8_t counter);
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

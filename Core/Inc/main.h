@@ -55,6 +55,9 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+
+
+
 uint8_t check_value_counts(uint8_t *samples, uint8_t value);
 
 void check_signal_length_up(uint8_t counts, uint32_t *length);
@@ -73,11 +76,12 @@ void check_down_periods(uint8_t counts, uint32_t *period);
 void check_down_up_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff);
 void check_up_down_diff(uint8_t down_counts, uint8_t up_counts, uint32_t *diff);
 
-uint32_t calculate_error(uint32_t *values_1, uint32_t *values_2);
+
 uint32_t calculate_mean(uint32_t *values);
-uint32_t calculate_error_partialy(uint32_t *values_1, uint32_t *values_2, uint8_t counter);
+
 uint32_t calculate_mean_partialy(uint32_t *values, uint8_t counter);
 
+void motor_control(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
